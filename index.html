@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOID HAMMER v1.0</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-skull-crossbones"></i> VOID HAMMER v1.0</h1>
+            <p class="subtitle">Layer 7 DDOS Tool - For Educational Purpose Only</p>
+            <div class="user-info">
+                <span><i class="fas fa-user"></i> {{ user }}</span>
+                <span class="status active"><i class="fas fa-circle"></i> ONLINE</span>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3><i class="fas fa-bolt"></i> Active Attacks</h3>
+                <p class="stat-number">{{ stats.active_attacks }}</p>
+            </div>
+            <div class="stat-card">
+                <h3><i class="fas fa-paper-plane"></i> Total Requests</h3>
+                <p class="stat-number">{{ "%.0f"|format(stats.total_requests_sent) }}</p>
+            </div>
+            <div class="stat-card">
+                <h3><i class="fas fa-clock"></i> Uptime</h3>
+                <p class="stat-number">{{ "%.1f"|format(stats.uptime) }}s</p>
+            </div>
+        </div>
+
+        <div class="attack-panel">
+            <h2><i class="fas fa-crosshairs"></i> Launch New Attack</h2>
+            
+            <div class="form-group">
+                <label for="targetUrl"><i class="fas fa-link"></i> Target URL</label>
+                <input type="text" id="targetUrl" placeholder="https://target.com" value="http://localhost:8080">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="threads"><i class="fas fa-microchip"></i> Threads</label>
+                    <input type="range" id="threads" min="10" max="1000" value="100">
+                    <span id="threadValue">100</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration"><i class="fas fa-hourglass-half"></i> Duration (seconds)</label>
+                    <input type="range" id="duration" min="10" max="300" value="60">
+                    <span id="durationValue">60</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="attackType"><i class="fas fa-tools"></i> Attack Type</label>
+                    <select id="attackType">
+                        <option value="http_flood">HTTP Flood</option>
+                        <option value="slowloris">Slowloris (Coming Soon)</option>
+                        <option value="xss_amplify">XSS Amplification (Coming Soon)</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="launchBtn" class="btn-attack">
+                <i class="fas fa-rocket"></i> LAUNCH ATTACK
+            </button>
+            <button id="stopAllBtn" class="btn-stop">
+                <i class="fas fa-stop-circle"></i> STOP ALL ATTACKS
+            </button>
+        </div>
+
+        <div class="active-attacks">
+            <h2><i class="fas fa-fire"></i> Active Attacks</h2>
+            <div id="attacksList">
+                <p class="empty-message">No active attacks</p>
+            </div>
+        </div>
+
+        <div class="terminal">
+            <h2><i class="fas fa-terminal"></i> Attack Log</h2>
+            <div class="terminal-output" id="logOutput">
+                <div>> System initialized. Ready for commands.</div>
+            </div>
+        </div>
+
+        <footer>
+            <p><i class="fas fa-exclamation-triangle"></i> <strong>WARNING:</strong> Use only on systems you own or have permission to test.</p>
+            <p class="copyright">VOID HAMMER v1.0 | KILLER_VOIDS © 2024</p>
+        </footer>
+    </div>
+
+    <script>
+        // Update slider values
+        document.getElementById('threads').addEventListener('input', function() {
+            document.getElementById('threadValue').textContent = this.value;
+        });
+        
+        document.getElementById('duration').addEventListener('input', function() {
+            document.getElementById('durationValue').textContent = this.value;
+        });
+
+        // Launch attack
+        document.getElementById('launchBtn').addEventListener('click', function() {
+            const targetUrl = document.getElementById('targetUrl').value;
+            const threads = document.getElementById('threads').value;
+            const duration = document.getElementById('duration').value;
+            const attackType = document.getElementById('attackType').value;
+            
+            if (!targetUrl) {
+                addLog('ERROR: Target URL required', 'error');
+                return;
+            }
+            
+            addLog(`Launching attack on ${targetUrl} with ${threads} threads for ${duration}s...`, 'info');
+            
+            fetch('/api/attack/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    url: targetUrl,
+                    threads: threads,
+                    duration: duration,
+                    type: attackType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                addLog(`SUCCESS: ${data.message}`, 'success');
+                updateStats();
+            })
+            .catch(error => {
+                addLog(`ERROR: ${error}`, 'error');
+            });
+        });
+
+        // Stop all attacks
+        document.getElementById('stopAllBtn').addEventListener('click', function() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    data.active_attacks.forEach(attack => {
+                        fetch(`/api/attack/stop/${attack.id}`, {method: 'POST'})
+                            .then(() => {
+                                addLog(`Stopped attack ${attack.id} on ${attack.target}`, 'warning');
+                            });
+                    });
+                    updateStats();
+                });
+        });
+
+        // Update stats every 3 seconds
+        function updateStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    // Update attacks list
+                    const attacksList = document.getElementById('attacksList');
+                    if (data.active_attacks.length > 0) {
+                        let html = '';
+                        data.active_attacks.forEach(attack => {
+                            html += `
+                            <div class="attack-item">
+                                <div class="attack-id">${attack.id}</div>
+                                <div class="attack-target">${attack.target}</div>
+                                <div class="attack-stats">
+                                    <span>Threads: ${attack.threads}</span>
+                                    <span>Elapsed: ${attack.elapsed.toFixed(1)}s</span>
+                                </div>
+                                <button class="btn-stop-small" onclick="stopAttack('${attack.id}')">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                            </div>`;
+                        });
+                        attacksList.innerHTML = html;
+                    } else {
+                        attacksList.innerHTML = '<p class="empty-message">No active attacks</p>';
+                    }
+                    
+                    // Update stats
+                    document.querySelector('.stat-number:nth-child(1)').textContent = data.active_attacks.length;
+                    document.querySelector('.stat-number:nth-child(2)').textContent = Math.floor(data.total_requests);
+                    document.querySelector('.stat-number:nth-child(3)').textContent = data.uptime.toFixed(1) + 's';
+                });
+        }
+
+        // Stop single attack
+        window.stopAttack = function(attackId) {
+            fetch(`/api/attack/stop/${attackId}`, {method: 'POST'})
+                .then(() => {
+                    addLog(`Stopped attack ${attackId}`, 'warning');
+                    updateStats();
+                });
+        };
+
+        // Add log to terminal
+        function addLog(message, type = 'info') {
+            const logOutput = document.getElementById('logOutput');
+            const timestamp = new Date().toLocaleTimeString();
+            const typeIcon = type === 'error' ? '✗' : type === 'success' ? '✓' : '>';
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-${type}`;
+            logEntry.innerHTML = `<span class="log-time">[${timestamp}]</span> <span class="log-icon">${typeIcon}</span> ${message}`;
+            
+            logOutput.appendChild(logEntry);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        // Auto-update
+        setInterval(updateStats, 3000);
+        updateStats();
+    </script>
+</body>
+</html>
